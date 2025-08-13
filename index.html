@@ -6,14 +6,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Wedding of Virna & Faza</title>
   <meta property="og:title" content="Wedding of Virna & Faza" />
-  <meta property="og:image" content="/assets/Photo-6.webp" />
+  <meta property="og:image" content="/assets/Photo-20.webp" />
   <meta property="og:url" content="https://virnafaza.love" />
   <meta property="og:site_name" content="Wedding of Virna & Faza" />
   <meta property="og:description" content="Your presence is an honor to us." />
   <meta name="twitter:title" content="Wedding of Virna & Faza" />
-  <meta name="twitter:image" content="/assets/Photo-6.webp" />
+  <meta name="twitter:image" content="/assets/Photo-20.webp" />
   <meta name="twitter:url" content="https://virnafaza.love" />
   <meta name="twitter:card" content="Your presence is an honor to us." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tangerine:wght@400;700&display=swap" rel="stylesheet">
   <style>
     * {
       box-sizing: border-box;
@@ -193,11 +196,13 @@
 
     .hero-title .line {
       display: block;
-      font-size: clamp(70px, 12vw, 130px);
+      font-size: clamp(28px, 8vw, 80px);
+      font-weight: 200;
     }
 
     .hero-title .line:nth-child(2) {
-      font-size: clamp(28px, 8vw, 80px);
+      font-size: clamp(70px, 12vw, 130px);
+      font-style: italic;
       opacity: 0.8;
       margin-top: 0.2em;
     }
@@ -218,16 +223,16 @@
       gap: 5vw;
       font-weight: 900;
       line-height: 0.8;
-      font-size: clamp(32px, 12vw, 140px);
+      font-size: clamp(90px, 17vw, 180px);
       will-change: transform, opacity;
     }
 
     .split-left {
-      transform: translateX(-250%);
+      transform: translateX(-280%);
     }
 
     .split-right {
-      transform: translateX(350%);
+      transform: translateX(380%);
     }
 
     /* SECTION PHOTOS (persistent across three sections) */
@@ -399,7 +404,6 @@
 
       .split-container {
         gap: 3vw;
-        font-size: clamp(28px, 10vw, 100px);
       }
 
       .section-copy p {
@@ -513,6 +517,18 @@
       width: 26px;
       height: 26px;
     }
+
+    .tangerine-regular {
+      font-family: "Tangerine", cursive;
+      font-weight: 400;
+      font-style: normal;
+    }
+
+    .tangerine-bold {
+      font-family: "Tangerine", cursive;
+      font-weight: 700;
+      font-style: normal;
+    }
   </style>
 </head>
 
@@ -543,16 +559,16 @@
       </div>
 
       <h1 class="hero-title" id="heroTitle">
-        <span class="line">Celebration</span>
-        <span class="line">of Love</span>
+        <span class="line">And so it</span>
+        <span class="line">Begins</span>
       </h1>
     </section>
 
     <!-- SPLIT TEXT -->
     <section class="split-text">
       <div class="split-container" id="splitContainer">
-        <span class="split-left" id="splitLeft">Virna &</span>
-        <span class="split-right" id="splitRight">Faza</span>
+        <span class="split-left tangerine-regular" id="splitLeft">Virna &</span>
+        <span class="split-right tangerine-regular" id="splitRight">Faza</span>
       </div>
     </section>
 
@@ -582,7 +598,8 @@
           starting a beautiful kind of buzz: our wedding day! Please join us, your blessings and presence will make this
           celebration complete; your dance moves will make it legendary. Come comfy-cute; bring your best smile.
           <b>PLEASE WEAR ANYTHING BUT WHITE!</b> Thank
-          you for being part of our story!</p>
+          you for being part of our story!
+        </p>
       </div>
     </section>
 
@@ -671,10 +688,33 @@
       const img = document.createElement('img');
       img.className = 'gallery-img';
       img.src = src; img.alt = `Gallery ${i + 1}`; img.dataset.depth = positions[i].depth;
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      try { img.fetchPriority = 'low'; } catch (_) { }
       Object.keys(positions[i]).forEach(k => { if (k !== 'depth') img.style[k] = positions[i][k]; });
       img.onload = imageLoaded; img.onerror = imageLoaded;
       gallery.appendChild(img); galleryElements.push(img);
     });
+
+    (function patchStartForWarmup() {
+      if (typeof startExperience !== 'function') return;
+      const _orig = startExperience;
+      window.startExperience = function () {
+        _orig();
+        const warm = () => {
+          if (!Array.isArray(galleryImages)) return;
+          galleryImages.forEach(src => {
+            const im = new Image();
+            try { im.fetchPriority = 'low'; } catch (_) { }
+            im.decoding = 'async';
+            im.loading = 'eager';
+            im.src = src;
+          });
+        };
+        if ('requestIdleCallback' in window) requestIdleCallback(warm, { timeout: 1500 }); else setTimeout(warm, 300);
+      };
+    })();
+
 
     // ---------- Images for preloader count ----------
     const preloadList = [
@@ -688,6 +728,19 @@
       document.getElementById('infoImg')
     ];
 
+    (function prioritizeCriticalImages() {
+      const ids = ['float1', 'float2', 'float3', 'photoA', 'photoB', 'infoImg'];
+      ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        try {
+          el.setAttribute('decoding', 'async');
+          el.setAttribute('loading', 'eager');
+          el.setAttribute('fetchpriority', 'high'); // Chromium/WebKit
+        } catch (_) { }
+      });
+    })();
+
     // Track loads
     let loadedImages = 0;
     const totalImages = preloadList.length + galleryImages.length;
@@ -699,7 +752,7 @@
     }
     function imageLoaded() { loadedImages++; if (loadedImages >= totalImages) setTimeout(hidePreloader, 200); }
     preloadList.forEach(img => { if (!img) return; img.onload = imageLoaded; img.onerror = imageLoaded; });
-    setTimeout(hidePreloader, 5500);
+    setTimeout(hidePreloader, 15500);
     window.addEventListener('load', hidePreloader, { once: true });
 
     const preloader = document.getElementById('preloader');
@@ -802,7 +855,7 @@
     };
 
     // Adjust scroll height to match segments
-    const TOTAL_MULT = 13; // gives enough breathing room for smoothness
+    const TOTAL_MULT = 17; // gives enough breathing room for smoothness
     const spacer = document.getElementById('scrollSpacer');
     function setScrollHeight() { spacer.style.height = `${(TOTAL_MULT - 1) * window.innerHeight}px`; }
     setScrollHeight(); window.addEventListener('resize', setScrollHeight);
@@ -866,8 +919,8 @@
       if (p > segments.split[0] && p <= segments.split[1]) {
         const t = (p - segments.split[0]) / (segments.split[1] - segments.split[0]);
         const slide = Math.min(1, t * 2);
-        splitLeft.style.transform = `translateX(${-250 + slide * 250}%)`;
-        splitRight.style.transform = `translateX(${350 - slide * 350}%)`;
+        splitLeft.style.transform = `translateX(${-280 + slide * 280}%)`;
+        splitRight.style.transform = `translateX(${380 - slide * 380}%)`;
 
         // heroTitle opacity fades to 0 by end of split
         const titleFade = 1 - t; // 1 -> 0
@@ -878,12 +931,13 @@
           const grow = (t - 0.6) / 0.4;
           splitContainer.style.transform = `scale(${1 + grow * 1.5})`;
           splitContainer.style.opacity = `${1 - grow}`;
+
         } else {
           splitContainer.style.transform = 'scale(1)';
           splitContainer.style.opacity = '1';
         }
       }
-      if (p > segments.split[1]) { heroTitle.style.opacity = '0'; splitLeft.style.opacity = '0'; splitRight.style.opacity = '0'; }
+      if (p > segments.split[1]) { heroTitle.style.opacity = '0'; splitContainer.style.opacity = '0'; }
 
       if (p > segments.info[1]) {
         heroImg.style.opacity = '0';

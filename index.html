@@ -6,14 +6,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Wedding of Virna & Faza</title>
   <meta property="og:title" content="Wedding of Virna & Faza" />
-	<meta property="og:image" content="assets/Photo-6.webp" />
-	<meta property="og:url" content="https://virnafaza.love" />
-	<meta property="og:site_name" content="Wedding of Virna & Faza" />
-	<meta property="og:description" content="Your presence is an honor to us." />
-	<meta name="twitter:title" content="Wedding of Virna & Faza" />
-	<meta name="twitter:image" content="assets/Photo-6.webp" />
-	<meta name="twitter:url" content="https://virnafaza.love" />
-	<meta name="twitter:card" content="Your presence is an honor to us." />
+  <meta property="og:image" content="assets/Photo-6.webp" />
+  <meta property="og:url" content="https://virnafaza.love" />
+  <meta property="og:site_name" content="Wedding of Virna & Faza" />
+  <meta property="og:description" content="Your presence is an honor to us." />
+  <meta name="twitter:title" content="Wedding of Virna & Faza" />
+  <meta name="twitter:image" content="assets/Photo-6.webp" />
+  <meta name="twitter:url" content="https://virnafaza.love" />
+  <meta name="twitter:card" content="Your presence is an honor to us." />
   <style>
     * {
       box-sizing: border-box;
@@ -490,6 +490,29 @@
       font-size: 26px;
       cursor: pointer;
     }
+
+    .music-btn {
+      position: fixed;
+      left: 18px;
+      bottom: 18px;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: none;
+      display: none;
+      /* shown after START */
+      place-items: center;
+      background: #ffffff;
+      color: #0a0a0a;
+      cursor: pointer;
+      z-index: 1200;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+    }
+
+    .music-btn svg {
+      width: 26px;
+      height: 26px;
+    }
   </style>
 </head>
 
@@ -544,7 +567,7 @@
     <section class="sections">
       <div class="section-copy" id="copy1">
         <h2>dr. Virna Wulandari</h2>
-        <p>Putri dari AKBP (purn) Drs. Sukarto, MM. dan AKBP (purn) Iis Sumarni, SH.</p>
+        <p>Putri dari AKBP (purn) Drs. Soekarto, MM. dan AKBP (purn) Iis Sumarni, SH.</p>
       </div>
       <div class="section-copy" id="copy2">
         <h2>Faza Byandika Hikmatullah Wijaya, BSc. Comp. Sci</h2>
@@ -569,7 +592,7 @@
           <div>
             <h4>Resepsi Pernikahan</h4>
             <p>Sabtu, 30 Agustus 2025</p>
-            <p>6:00 PM WIB</p>
+            <p>6:30 PM WIB</p>
           </div>
           <div>
             <h4>Wheels Coffee Roasters - Juanda (Dago)</h4>
@@ -589,6 +612,13 @@
       <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
         <path
           d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm12 0h2v2h-2v-2zm-4 0h2v2h-2v-2zm4 4h2v2h2v2h-4v-4zm-4 0h2v6h-2v-6zm8-8h2v2h-2V9z" />
+      </svg>
+    </button>
+
+    <button class="music-btn" id="musicBtn" aria-label="Pause music" title="Pause music">
+      <!-- default to pause icon; will switch dynamically -->
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M6 5h4v14H6zM14 5h4v14h-4z" />
       </svg>
     </button>
 
@@ -715,6 +745,45 @@
       } catch (e) { /* no-op */ }
     }
 
+    const musicBtn = document.getElementById('musicBtn');
+    const PLAY_SVG = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+    const PAUSE_SVG = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>';
+
+
+    function updateMusicBtnIcon() {
+      if (!bgm) return;
+      const playing = !bgm.paused && !bgm.ended;
+      musicBtn.innerHTML = playing ? PAUSE_SVG : PLAY_SVG;
+      musicBtn.setAttribute('aria-label', playing ? 'Pause music' : 'Play music');
+      musicBtn.title = playing ? 'Pause music' : 'Play music';
+    }
+
+    // hook into existing START flow
+    const origStart = startExperience;
+    window.startExperience = function patchedStart() {
+      origStart();
+      // show the button after audio has attempted to start
+      musicBtn.style.display = 'grid';
+      updateMusicBtnIcon();
+    };
+
+    // toggle on click
+    musicBtn.addEventListener('click', () => {
+      if (!bgm) return;
+      if (bgm.paused) {
+        bgm.muted = false;
+        bgm.play().catch(() => { });
+      } else {
+        bgm.pause();
+      }
+      updateMusicBtnIcon();
+    });
+
+    // keep icon in sync if playback state changes for other reasons
+    if (bgm) {
+      ['play', 'pause', 'ended'].forEach(ev => bgm.addEventListener(ev, updateMusicBtnIcon));
+    }
+
     startBtn.addEventListener('click', startExperience, { once: true });
 
 
@@ -731,7 +800,7 @@
     };
 
     // Adjust scroll height to match segments
-    const TOTAL_MULT = 15; // gives enough breathing room for smoothness
+    const TOTAL_MULT = 10; // gives enough breathing room for smoothness
     const spacer = document.getElementById('scrollSpacer');
     function setScrollHeight() { spacer.style.height = `${(TOTAL_MULT - 1) * window.innerHeight}px`; }
     setScrollHeight(); window.addEventListener('resize', setScrollHeight);
@@ -812,8 +881,8 @@
           splitContainer.style.opacity = '1';
         }
       }
-      if (p > segments.split[1]) { heroTitle.style.opacity = '0'; splitLeft.style.opacity = '0'; splitRight.style.opacity = '0';   }
-      
+      if (p > segments.split[1]) { heroTitle.style.opacity = '0'; splitLeft.style.opacity = '0'; splitRight.style.opacity = '0'; }
+
       if (p > segments.info[1]) {
         heroImg.style.opacity = '0';
       }
@@ -939,7 +1008,7 @@
           const translateY = -depth * 20 * focus;
           img.style.opacity = opacity;
           img.style.filter = `blur(${blur}px)`;
-          img.style.transform = `translateY(${translateY}vh) scale(${focus > 0.8 && i === 4 ? 1.7 :scale})`;
+          img.style.transform = `translateY(${translateY}vh) scale(${focus > 0.8 && i === 4 ? 1.7 : scale})`;
         });
       }
 
@@ -986,6 +1055,7 @@
     qrClose.addEventListener('click', closeQR);
     qrModal.addEventListener('click', (e) => { if (e.target === qrModal) closeQR(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeQR(); });
+
   </script>
 </body>
 

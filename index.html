@@ -193,7 +193,7 @@
 
     .hero-title .line {
       display: block;
-      font-size: clamp(80px, 14vw, 150px);
+      font-size: clamp(70px, 12vw, 130px);
     }
 
     .hero-title .line:nth-child(2) {
@@ -323,13 +323,13 @@
     }
 
     .info-grid h4 {
-      font-size: clamp(32px, 5vw, 30px);
+      font-size: clamp(23px, 3vw, 33px);
       font-weight: 800;
     }
 
     .info-grid p {
       color: #cfcfcf;
-      font-size: clamp(26px, 4vw, 32px);
+      font-size: clamp(20px, 2vw, 30px);
     }
 
     .map-link {
@@ -543,8 +543,8 @@
       </div>
 
       <h1 class="hero-title" id="heroTitle">
-        <span class="line">Wedding</span>
-        <span class="line">Invitation</span>
+        <span class="line">Celebration</span>
+        <span class="line">of Love</span>
       </h1>
     </section>
 
@@ -567,20 +567,22 @@
     <section class="sections">
       <div class="section-copy" id="copy1">
         <h2>dr. Virna Wulandari</h2>
-        <p>Putri dari AKBP (purn) Drs. Soekarto, MM. dan AKBP (purn) Iis Sumarni, SH.</p>
+        <p>Daughter of AKBP (purn) Drs. Soekarto, MM. and AKBP (purn) Iis Sumarni, SH.</p>
       </div>
       <div class="section-copy" id="copy2">
         <h2>Faza Byandika Hikmatullah Wijaya, BSc. Comp. Sci</h2>
-        <p>Putra dari Bambang Priyatna Wijaya, ST., MT. dan Hikmah Widiati, Amd.</p>
+        <p>Son of Bambang Priyatna Wijaya, ST., MT. and Hikmah Widiati, Amd.</p>
       </div>
       <div class="section-copy" id="copy3">
         <blockquote style="font-size: 1.6em; font-style: italic; color: #ccc; margin: 1em 0; line-height: 1.4;">
-          "Asam di gunung, garam di laut, bertemu dalam satu ikatan yang suci."
+          "Love is the astrolabe of God’s mysteries."
+          - Rumi
         </blockquote>
-        <p style="text-align: left; font-size: 1.2em; line-height: 1.2;">Tanpa mengurangi rasa hormat, kami mengundang
-          Bapak/Ibu/Saudara(i) untuk menghadiri resepsi pernikahan kami.
-          Merupakan kehormatan dan kebahagiaan bagi kami apabila Bapak/Ibu/Saudara(i) berkenan hadir dan memberikan doa
-          restu. Atas kehadiran dan doa restunya kami ucapkan terima kasih.</p>
+        <p style="text-align: left; font-size: 1.0em; line-height: 1.2;">With all due respect and excitement, we are
+          starting a beautiful kind of buzz: our wedding day! Please join us, your blessings and presence will make this
+          celebration complete; your dance moves will make it legendary. Come comfy-cute; bring your best smile.
+          <b>PLEASE WEAR ANYTHING BUT WHITE!</b> Thank
+          you for being part of our story!</p>
       </div>
     </section>
 
@@ -590,8 +592,8 @@
         <img class="info-img" id="infoImg" src="assets/Photo-7.webp" alt="Venue" />
         <div class="info-grid" id="infoGrid">
           <div>
-            <h4>Resepsi Pernikahan</h4>
-            <p>Sabtu, 30 Agustus 2025</p>
+            <h4>Reception</h4>
+            <p>Saturday, August 30, 2025</p>
             <p>6:30 PM WIB</p>
           </div>
           <div>
@@ -800,7 +802,7 @@
     };
 
     // Adjust scroll height to match segments
-    const TOTAL_MULT = 10; // gives enough breathing room for smoothness
+    const TOTAL_MULT = 13; // gives enough breathing room for smoothness
     const spacer = document.getElementById('scrollSpacer');
     function setScrollHeight() { spacer.style.height = `${(TOTAL_MULT - 1) * window.innerHeight}px`; }
     setScrollHeight(); window.addEventListener('resize', setScrollHeight);

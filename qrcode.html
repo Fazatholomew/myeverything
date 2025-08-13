@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Particle QR (Scannable)</title>
+  <style>
+    :root {
+      --size: 360px;
+      /* canvas CSS size; actual backing store is scaled to DPR */
+      --bg: #0a0b0d;
+      /* page background */
+      --ink: #0b0f14;
+      /* card background */
+      --fg: #e8edf2;
+      /* text color */
+    }
+
+    html,
+    body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--fg);
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
+    }
+
+    .wrap {
+      min-height: 100%;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+    }
+
+    .card {
+      width: min(92vw, 480px);
+      background: linear-gradient(180deg, var(--ink), #0e1218);
+      border-radius: 18px;
+      padding: 16px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+    }
+
+    h1 {
+      font-size: 18px;
+      margin: 0 0 10px;
+      letter-spacing: .2px;
+    }
+
+    .controls {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .row {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: 1fr auto;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid #1b2330;
+      background: #0f141b;
+      color: var(--fg);
+    }
+
+    button {
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: 1px solid #2a3547;
+      background: #131a23;
+      color: var(--fg);
+      cursor: pointer;
+    }
+
+    .hint {
+      font-size: 12px;
+      opacity: .7;
+      margin-top: 8px;
+    }
+
+    .stage {
+      display: grid;
+      place-items: center;
+      padding: 10px;
+    }
+
+    canvas {
+      width: var(--size);
+      height: var(--size);
+      display: block;
+      border-radius: 12px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Particle QR (scannable, animated)</h1>
+      <div class="controls">
+        <div class="row">
+          <input id="payload" type="text" placeholder="Data to encode (URL/text)"
+            value="https://example.com/hello?token=alpha-123" />
+          <button id="set">Set</button>
+        </div>
+        <div class="row">
+          <button id="pause">Pause animation</button>
+          <button id="static">Static mode</button>
+        </div>
+        <div class="hint">Tips: keep data short, ECC=H, quiet zone intact. If a phone struggles, pause or use Static.
+        </div>
+      </div>
+      <div class="stage"><canvas id="cnv"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Lightweight QR lib -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+  <script>
+    (() => {
+      const canvas = document.getElementById('cnv');
+      const ctx = canvas.getContext('2d');
+      const DPR = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+      const CSS = parseInt(getComputedStyle(canvas).width, 10);
+      const PAD = 18; // device-space padding for glow
+      canvas.width = CSS * DPR;
+      canvas.height = CSS * DPR;
+
+      // Config
+      const ECC = 'H';            // strong error correction
+      const QUIET = 4;            // quiet zone in modules
+      const PARTICLES_PER_DARK_MODULE = 3;
+      const DARK_BASE_FILL = 0.65; // ensure >=60% dark coverage even while particles move
+      const LIGHT_PARTICLE_ALPHA = 0.08; // faint sparkle in light modules
+      const GLOW = true;
+
+      let raf = null;
+      let animating = true;
+      let staticMode = false;
+
+      const payloadInput = document.getElementById('payload');
+      document.getElementById('set').onclick = () => build(payloadInput.value.trim() || 'hello');
+      document.getElementById('pause').onclick = () => { animating = !animating; if (animating && !staticMode) loop(); };
+      document.getElementById('static').onclick = () => { staticMode = !staticMode; if (staticMode) cancelAnimationFrame(raf); else loop(); };
+
+      // Helpers
+      function makeQR(data) {
+        const qr = qrcode(0, ECC); // version auto
+        qr.addData(data);
+        qr.make();
+        return qr;
+      }
+
+      function inFinder(r, c, n) {
+        // 7x7 finder at TL, TR, BL (with 1-module white separator around, but we keep whole 7x7 solid)
+        const boxes = [
+          { r0: 0, c0: 0 }, { r0: 0, c0: n - 7 }, { r0: n - 7, c0: 0 }
+        ];
+        for (const b of boxes) {
+          if (r >= b.r0 && r < b.r0 + 7 && c >= b.c0 && c < b.c0 + 7) return true;
+        }
+        return false;
+      }
+
+      function build(data) {
+        cancelAnimationFrame(raf);
+        const qr = makeQR(data);
+        const n = qr.getModuleCount();
+
+        // Compute module size to fit canvas with quiet zone
+        const avail = Math.min(canvas.width, canvas.height) - PAD * 2;
+        const totalModules = n + QUIET * 2;
+        const mod = Math.floor(avail / totalModules);
+        const size = mod * totalModules;
+        const ox = Math.floor((canvas.width - size) / 2);
+        const oy = Math.floor((canvas.height - size) / 2);
+
+        // Build precomputed grid + particles
+        const modules = [];
+        const particles = [];
+
+        for (let r = 0; r < n; r++) {
+          modules[r] = [];
+          for (let c = 0; c < n; c++) {
+            const dark = qr.isDark(r, c);
+            modules[r][c] = { dark };
+            if (dark && !inFinder(r, c, n)) {
+              // Spawn particles confined inside this module’s rect
+              const mx = ox + (c + QUIET) * mod;
+              const my = oy + (r + QUIET) * mod;
+              for (let k = 0; k < PARTICLES_PER_DARK_MODULE; k++) {
+                const rad = Math.max(1, Math.round(mod * (0.13 + Math.random() * 0.06)));
+                const margin = Math.max(1, rad + 1);
+                particles.push({
+                  mx, my, mod,
+                  x: mx + margin + Math.random() * (mod - margin * 2),
+                  y: my + margin + Math.random() * (mod - margin * 2),
+                  vx: (Math.random() * 2 - 1) * (0.25 + mod * 0.03),
+                  vy: (Math.random() * 2 - 1) * (0.25 + mod * 0.03),
+                  r: rad
+                });
+              }
+            }
+          }
+        }
+
+        // Draw once (base) then animate
+        function drawBase() {
+          // Background
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          if (GLOW) {
+            // subtle vignette / glow
+            const g = ctx.createRadialGradient(canvas.width / 2, canvas.height / 2, size * 0.2, canvas.width / 2, canvas.height / 2, size * 0.62);
+            g.addColorStop(0, '#0b1118');
+            g.addColorStop(1, '#07090d');
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          } else {
+            ctx.fillStyle = '#0a0b0d';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          }
+
+          // Base QR fill to keep contrast (dark modules get a semi-opaque base)
+          for (let r = 0; r < n; r++) {
+            for (let c = 0; c < n; c++) {
+              const mx = ox + (c + QUIET) * mod;
+              const my = oy + (r + QUIET) * mod;
+              if (inFinder(r, c, n)) {
+                // Draw classic finder pattern (7x7)
+                ctx.fillStyle = '#000';
+                ctx.fillRect(mx, my, mod, mod);
+              } else if (modules[r][c].dark) {
+                ctx.fillStyle = `rgba(0,0,0,${DARK_BASE_FILL})`;
+                ctx.fillRect(mx, my, mod, mod);
+              } else {
+                // very light noise tile for aesthetic (optional)
+                // leave blank for maximum contrast
+              }
+            }
+          }
+
+          // Draw finder rings to look nice (thick square rings)
+          const drawFinder = (row0, col0) => {
+            const x0 = ox + (col0 + QUIET) * mod;
+            const y0 = oy + (row0 + QUIET) * mod;
+            ctx.fillStyle = '#000';
+            ctx.fillRect(x0, y0, 7 * mod, 7 * mod);
+            ctx.clearRect(x0 + 1 * mod, y0 + 1 * mod, 5 * mod, 5 * mod);
+            ctx.fillRect(x0 + 2 * mod, y0 + 2 * mod, 3 * mod, 3 * mod);
+          };
+          drawFinder(0, 0);
+          drawFinder(0, n - 7);
+          drawFinder(n - 7, 0);
+        }
+
+        function drawFrame() {
+          drawBase();
+
+          if (!staticMode) {
+            // Particles in dark modules
+            ctx.fillStyle = '#000';
+            for (const p of particles) {
+              // Move
+              p.x += p.vx;
+              p.y += p.vy;
+              // Bounce inside the module square
+              if (p.x <= p.mx + p.r || p.x >= p.mx + p.mod - p.r) p.vx *= -1;
+              if (p.y <= p.my + p.r || p.y >= p.my + p.mod - p.r) p.vy *= -1;
+              // Draw
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+              ctx.fill();
+            }
+
+            // Subtle sparkles on light modules (very low alpha)
+            ctx.globalAlpha = LIGHT_PARTICLE_ALPHA;
+            const step = Math.max(2, Math.floor(mod / 2));
+            ctx.fillStyle = '#fff';
+            for (let y = oy + QUIET * mod; y < oy + (QUIET + n) * mod; y += step) {
+              for (let x = ox + QUIET * mod; x < ox + (QUIET + n) * mod; x += step) {
+                const r = Math.random();
+                if (r < 0.008) {
+                  ctx.fillRect(x, y, 1, 1);
+                }
+              }
+            }
+            ctx.globalAlpha = 1;
+          } else {
+            // Optional: slight per-module dot texture for a “alive but static” feel
+          }
+        }
+
+        function loop() {
+          drawFrame();
+          if (animating && !staticMode) raf = requestAnimationFrame(loop);
+        }
+
+        drawBase();
+        if (!staticMode) loop();
+      }
+
+      // First render
+      build(payloadInput.value.trim());
+    })();
+  </script>
+</body>
+
+</html>

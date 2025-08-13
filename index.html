@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cinematic Parallax — Multi-Section (0813c)</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #f5f5f5;
+      line-height: 1;
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+      touch-action: pan-y;
+      /* ensure vertical scroll on touch */
+    }
+
+    /* PRELOADER */
+    .preloader {
+      position: fixed;
+      inset: 0;
+      background: #0a0a0a;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      transition: opacity 0.5s ease, visibility 0.5s ease;
+    }
+
+    .preloader.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .loader-ring {
+      width: 50px;
+      height: 50px;
+      border: 2px solid #222;
+      border-top: 2px solid #fff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 14px;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .loader-text {
+      font-size: 1.5rem;
+      color: #bbb;
+      letter-spacing: 1px;
+    }
+
+    .start-btn {
+      margin-top: 16px;
+      padding: 12px 22px;
+      border: 0;
+      border-radius: 999px;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      background: #fff;
+      color: #0a0a0a;
+      cursor: pointer;
+      box-shadow: 0 10px 30px rgba(255, 255, 255, 0.08);
+    }
+
+    .start-btn:active {
+      transform: translateY(1px);
+    }
+
+    /* SCROLL HEIGHT (real scroll area) */
+    .scroll-section {
+      height: 100vh;
+      position: relative;
+    }
+
+    .scroll-spacer {
+      height: 900vh;
+      background: transparent;
+    }
+
+    /* FIXED VISUAL LAYER */
+    .content-wrapper {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      z-index: 1;
+    }
+
+    /* HERO */
+    .hero {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .hero-bg {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 100%);
+    }
+
+    .hero-img {
+      position: absolute;
+      background-color: #0a0a0a;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: 0.7;
+      will-change: transform, opacity;
+    }
+
+    .floating-imgs {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .float-img {
+      position: absolute;
+      width: 35vw;
+      max-width: 250px;
+      height: auto;
+      object-fit: cover;
+      border-radius: 8px;
+      opacity: 0;
+      filter: blur(10px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      will-change: transform, opacity, filter;
+    }
+
+    .float-img:nth-child(1) {
+      top: 15%;
+      right: 10%;
+    }
+
+    .float-img:nth-child(2) {
+      bottom: 20%;
+      left: 8%;
+    }
+
+    .float-img:nth-child(3) {
+      top: 45%;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    .hero-title {
+      position: relative;
+      z-index: 10;
+      text-align: center;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      line-height: 0.85;
+      transform: translateY(50vh);
+      will-change: transform, opacity;
+    }
+
+    .hero-title .line {
+      display: block;
+      font-size: clamp(80px, 14vw, 150px);
+    }
+
+    .hero-title .line:nth-child(2) {
+      font-size: clamp(28px, 8vw, 80px);
+      opacity: 0.8;
+      margin-top: 0.2em;
+    }
+
+    /* SPLIT TEXT */
+    .split-text {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+
+    .split-container {
+      display: flex;
+      align-items: center;
+      gap: 5vw;
+      font-weight: 900;
+      line-height: 0.8;
+      font-size: clamp(32px, 12vw, 140px);
+      will-change: transform, opacity;
+    }
+
+    .split-left {
+      transform: translateX(-250%);
+    }
+
+    .split-right {
+      transform: translateX(350%);
+    }
+
+    /* SECTION PHOTOS (persistent across three sections) */
+    .section-photos {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .section-photo {
+      position: absolute;
+      height: auto;
+      object-fit: cover;
+      border-radius: 12px;
+      opacity: 0;
+      filter: blur(12px);
+      box-shadow: 0 18px 55px rgba(0, 0, 0, 0.55);
+      will-change: transform, opacity, filter;
+    }
+
+    #photoA {
+      top: 5%;
+      left: 25%;
+      width: clamp(180px, 28vw, 420px);
+    }
+
+    #photoB {
+      top: 68%;
+      left: 42%;
+      transform: translateX(-50%);
+      width: clamp(200px, 32vw, 480px);
+    }
+
+    #photoC {
+      top: 52%;
+      right: 8%;
+      width: clamp(170px, 26vw, 400px);
+      opacity: 0;
+    }
+
+    /* SECTION COPY (paragraphs only) */
+    .sections {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      pointer-events: none;
+    }
+
+    .section-copy {
+      position: absolute;
+      max-width: min(86vw, 820px);
+      text-align: center;
+      color: #e9e9e9;
+      line-height: 1.2;
+      letter-spacing: 0.01em;
+      opacity: 0;
+      transform: translateY(-24vh);
+      will-change: transform, opacity;
+    }
+
+    .section-copy p {
+      font-size: clamp(14px, 3.8vw, 18px);
+      color: #cfcfcf;
+    }
+
+    /* INFO SECTION (photo on top + h4 rows + map) */
+    .info {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      align-items: start;
+      padding: 4vh 6vw;
+      pointer-events: auto;
+    }
+
+    .info-inner {
+      margin-top: 8vh;
+      will-change: transform, opacity;
+    }
+
+    .info-img {
+      width: 100%;
+      height: auto;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+    }
+
+    .info-grid {
+      display: grid;
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    .info-grid h4 {
+      font-size: clamp(32px, 5vw, 30px);
+      font-weight: 800;
+    }
+
+    .info-grid p {
+      color: #cfcfcf;
+      font-size: clamp(26px, 4vw, 32px);
+    }
+
+    .map-link {
+      justify-self: start;
+      display: inline-block;
+      margin-top: 8px;
+      font-weight: 700;
+      color: #fff;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    /* GALLERY */
+    .gallery {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .gallery-img {
+      position: absolute;
+      width: clamp(200px, 25vw, 320px);
+      height: auto;
+      object-fit: cover;
+      border-radius: 12px;
+      opacity: 0;
+      filter: blur(20px);
+      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.6);
+      will-change: transform, opacity, filter;
+    }
+
+    /* HUD */
+    .scroll-hint {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #888;
+      font-size: 14px;
+      z-index: 100;
+      opacity: 1;
+      transition: opacity 0.3s ease;
+    }
+
+    .debug {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 12px;
+      z-index: 1000;
+      color: #fff;
+    }
+
+    /* MOBILE */
+    @media (max-width: 768px) {
+      .float-img {
+        width: 40vw;
+        max-width: 200px;
+      }
+
+      .gallery-img {
+        width: clamp(150px, 35vw, 280px);
+      }
+
+      .split-container {
+        gap: 3vw;
+        font-size: clamp(28px, 10vw, 100px);
+      }
+
+      .section-copy p {
+        font-size: clamp(13px, 3.8vw, 16px);
+      }
+    }
+
+    /* FLOATING ACTION BUTTON (QR) */
+    .fab {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: none;
+      display: grid;
+      place-items: center;
+      background: #ffffff;
+      color: #0a0a0a;
+      cursor: pointer;
+      z-index: 1200;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+    }
+
+    .fab svg {
+      width: 26px;
+      height: 26px;
+    }
+
+    /* QR MODAL */
+    .qr-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 10050;
+    }
+
+    .qr-modal.open {
+      display: flex;
+    }
+
+    .qr-card {
+      position: relative;
+      width: min(92vw, 380px);
+      padding: 18px 18px 22px;
+      border-radius: 16px;
+      background: #121212;
+      box-shadow: 0 30px 70px rgba(0, 0, 0, 0.6);
+      text-align: center;
+    }
+
+    .qr-card h3 {
+      font-size: 18px;
+      margin-bottom: 10px;
+      letter-spacing: 0.02em;
+    }
+
+    .qr-card img {
+      display: block;
+      width: 280px;
+      max-width: 82vw;
+      height: auto;
+      border-radius: 8px;
+      margin: 6px auto 8px;
+      background: #fff;
+    }
+
+    .qr-caption {
+      color: #bdbdbd;
+      font-size: 12px;
+      letter-spacing: 0.02em;
+    }
+
+    .qr-close {
+      position: absolute;
+      top: 8px;
+      right: 10px;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: none;
+      background: transparent;
+      color: #bdbdbd;
+      font-size: 26px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="preloader" id="preloader">
+    <div class="loader-ring" id="loaderRing"></div>
+    <div class="loader-text" id="loadingText">LOADING</div>
+    <button class="start-btn hidden" id="startBtn" aria-label="Start">START</button>
+  </div>
+
+  <!-- <div class="debug" id="debug">Scroll: 0 | Progress: 0%</div> -->
+
+  <!-- Scrollable height drivers -->
+  <div class="scroll-section"></div>
+  <div class="scroll-spacer" id="scrollSpacer"></div>
+
+  <!-- Fixed visual content -->
+  <div class="content-wrapper" aria-hidden="true" id="contentWrap">
+    <!-- HERO -->
+    <section class="hero">
+      <div class="hero-bg"></div>
+      <div class="hero-img" src="" alt="Portrait" id="heroImg" />
+
+      <div class="floating-imgs">
+        <img class="float-img" src="assets/Photo-6.webp" alt="Float 3" id="float3" />
+        <img class="float-img" src="assets/Photo-2.webp" alt="Float 2" id="float2" />
+        <img class="float-img" src="assets/Photo-3.webp" alt="Float 1" id="float1" />
+      </div>
+
+      <h1 class="hero-title" id="heroTitle">
+        <span class="line">Wedding</span>
+        <span class="line">Invitation</span>
+      </h1>
+    </section>
+
+    <!-- SPLIT TEXT -->
+    <section class="split-text">
+      <div class="split-container" id="splitContainer">
+        <span class="split-left" id="splitLeft">Virna &</span>
+        <span class="split-right" id="splitRight">Faza</span>
+      </div>
+    </section>
+
+    <!-- PERSISTENT SECTION PHOTOS -->
+    <section class="section-photos">
+      <img class="section-photo" id="photoA" src="assets/Photo-1.webp" alt="Photo A" />
+      <img class="section-photo" id="photoB" src="assets/Photo-4.webp" alt="Photo B" />
+      <!-- <img class="section-photo" id="photoC" src="" alt="Photo C" /> -->
+    </section>
+
+    <!-- PARAGRAPH-ONLY COPIES FOR THREE SECTIONS -->
+    <section class="sections">
+      <div class="section-copy" id="copy1">
+        <h2>dr. Virna Wulandari</h2>
+        <p>Putri dari AKBP (purn) Drs. Sukarto, MM. dan AKBP (purn) Iis Sumarni, SH.</p>
+      </div>
+      <div class="section-copy" id="copy2">
+        <h2>Faza Byandika Hikmatullah Wijaya, BSc. Comp. Sci</h2>
+        <p>Putra dari Bambang Priyatna Wijaya, ST., MT. dan Hikmah Widiati, Amd.</p>
+      </div>
+      <div class="section-copy" id="copy3">
+        <blockquote style="font-size: 1.6em; font-style: italic; color: #ccc; margin: 1em 0; line-height: 1.4;">
+          "Asam di gunung, garam di laut, bertemu dalam satu ikatan yang suci."
+        </blockquote>
+        <p style="text-align: left; font-size: 1.2em; line-height: 1.2;">Tanpa mengurangi rasa hormat, kami mengundang
+          Bapak/Ibu/Saudara(i) untuk menghadiri resepsi pernikahan kami.
+          Merupakan kehormatan dan kebahagiaan bagi kami apabila Bapak/Ibu/Saudara(i) berkenan hadir dan memberikan doa
+          restu. Atas kehadiran dan doa restunya kami ucapkan terima kasih.</p>
+      </div>
+    </section>
+
+    <!-- INFO SECTION (photo on top + h4 details + map link) -->
+    <section class="info" id="infoSection">
+      <div class="info-inner" id="infoInner">
+        <img class="info-img" id="infoImg" src="assets/Photo-7.webp" alt="Venue" />
+        <div class="info-grid" id="infoGrid">
+          <div>
+            <h4>Resepsi Pernikahan</h4>
+            <p>Sabtu, 30 Agustus 2025</p>
+            <p>6:00 PM WIB</p>
+          </div>
+          <div>
+            <h4>Wheels Coffee Roasters - Juanda (Dago)</h4>
+            <p>Jl. Ir. H. Juanda No.256, Sekeloa, Kecamatan Coblong, Kota Bandung, Jawa Barat 40135</p>
+          </div>
+          <a class="map-link" id="mapLink" href="https://maps.app.goo.gl/jnNiZLcVUPjYtcma9" target="_blank"
+            rel="noopener">Open in Google Maps</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- GALLERY -->
+    <section class="gallery" id="gallery"></section>
+
+    <!-- Floating QR Button -->
+    <button class="fab" id="qrFab" aria-label="Show QR code" title="Show QR code">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path
+          d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm12 0h2v2h-2v-2zm-4 0h2v2h-2v-2zm4 4h2v2h2v2h-4v-4zm-4 0h2v6h-2v-6zm8-8h2v2h-2V9z" />
+      </svg>
+    </button>
+
+    <!-- QR Modal -->
+    <div class="qr-modal" id="qrModal" aria-hidden="true">
+      <div class="qr-card" role="dialog" aria-modal="true" aria-labelledby="qrTitle">
+        <button class="qr-close" id="qrClose" aria-label="Close">×</button>
+        <h3 id="qrTitle">Scan to open</h3>
+        <img id="qrImg" alt="QR code" src="" />
+        <p class="qr-caption">Point your camera to open the link.</p>
+      </div>
+    </div>
+
+
+    <div class="scroll-hint" id="scrollHint">Scroll Me</div>
+    <audio id="bgm" preload="auto" loop muted>
+      <source src="assets/music.mp3" type="audio/mpeg" />
+    </audio>
+  </div>
+
+  <script>
+    // ---------- Helpers ----------
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const clamp01 = (x) => Math.max(0, Math.min(1, x));
+    const easeOutCubic = (x) => 1 - Math.pow(1 - x, 3);
+    const easeInCubic = (x) => x * x * x;
+
+    // ---------- Gallery setup ----------
+    const galleryImages = [];
+
+    for (let i = 8; i < 14; i++) {
+      galleryImages.push(`assets/Photo-${i}.webp`);
+    }
+    const gallery = document.getElementById('gallery');
+    const galleryElements = [];
+    const positions = [
+      { top: '5%', left: '7%', depth: 0.3 },
+      { top: '25%', right: '20%', depth: 0.5 },
+      { top: '58%', left: '10%', depth: 0.7 },
+      { top: '45%', left: '60%', depth: 0.4 },
+      // { top: '60%', right: '15%', depth: 0.6 },
+      { top: '85%', left: '15%', depth: 0.8 },
+      // { top: '55%', right: '40%', depth: 0.3 },
+      { top: '85%', left: '50%', depth: 0.5 }
+    ];
+
+    galleryImages.forEach((src, i) => {
+      const img = document.createElement('img');
+      img.className = 'gallery-img';
+      img.src = src; img.alt = `Gallery ${i + 1}`; img.dataset.depth = positions[i].depth;
+      Object.keys(positions[i]).forEach(k => { if (k !== 'depth') img.style[k] = positions[i][k]; });
+      img.onload = imageLoaded; img.onerror = imageLoaded;
+      gallery.appendChild(img); galleryElements.push(img);
+    });
+
+    // ---------- Images for preloader count ----------
+    const preloadList = [
+      document.getElementById('heroImg'),
+      document.getElementById('float1'),
+      document.getElementById('float2'),
+      document.getElementById('float3'),
+      document.getElementById('photoA'),
+      document.getElementById('photoB'),
+      //document.getElementById('photoC'),
+      document.getElementById('infoImg')
+    ];
+
+    // Track loads
+    let loadedImages = 0;
+    const totalImages = preloadList.length + galleryImages.length;
+    function hidePreloader() {
+      document.getElementById('loaderRing').classList.add('hidden');
+      document.getElementById('loadingText').classList.add('hidden');
+      document.getElementById('startBtn').classList.remove('hidden');
+
+    }
+    function imageLoaded() { loadedImages++; if (loadedImages >= totalImages) setTimeout(hidePreloader, 200); }
+    preloadList.forEach(img => { if (!img) return; img.onload = imageLoaded; img.onerror = imageLoaded; });
+    setTimeout(hidePreloader, 5500);
+    window.addEventListener('load', hidePreloader, { once: true });
+
+    const preloader = document.getElementById('preloader');
+    const startBtn = document.getElementById('startBtn');
+    const bgm = document.getElementById('bgm');
+    const contentWrap = document.getElementById('contentWrap');
+    const BGM_START_AT = 24.7;   // seconds, where playback should begin
+    const BGM_END_AT = null;     // seconds, optional. If set, loop between START and END. Set to null to disable.
+
+    function setBgmStartPosition(bgmEl) {
+      const seekTo = Math.max(0, Number(BGM_START_AT) || 0);
+      const doSeek = () => { try { bgmEl.currentTime = seekTo; } catch (_) { } };
+      if (bgmEl.readyState >= 1) doSeek();
+      else bgmEl.addEventListener('loadedmetadata', doSeek, { once: true });
+    }
+
+    function enableSegmentLoop(bgmEl) {
+      if (typeof BGM_END_AT === 'number' && BGM_END_AT > (Number(BGM_START_AT) || 0)) {
+        bgmEl.loop = false; // we'll handle looping within the segment manually
+        const onUpdate = () => {
+          if (bgmEl.currentTime >= BGM_END_AT) {
+            // quick, seamless jump back to the segment start
+            bgmEl.currentTime = Number(BGM_START_AT) || 0;
+            if (bgmEl.paused) bgmEl.play().catch(() => { });
+          }
+        };
+        // Avoid attaching twice
+        bgmEl._segmentLoopBound || (bgmEl._segmentLoopBound = onUpdate);
+        bgmEl.removeEventListener('timeupdate', bgmEl._segmentLoopBound);
+        bgmEl.addEventListener('timeupdate', bgmEl._segmentLoopBound);
+      }
+    }
+
+    function startExperience() {
+      // Hide preloader
+      preloader.classList.add('hidden');
+      contentWrap.removeAttribute('aria-hidden');
+      // Play music (unmute first for iOS Safari)
+      try {
+        setBgmStartPosition(bgm);  // seek to the desired starting second
+        enableSegmentLoop(bgm);    // optional: keep looping within the segment
+        bgm.muted = false;
+        const p = bgm.play();
+        if (p && typeof p.then === 'function') { p.catch(() => {/* ignore autoplay errors */ }); }
+      } catch (e) { /* no-op */ }
+    }
+
+    startBtn.addEventListener('click', startExperience, { once: true });
+
+
+    // ---------- Segments ----------
+    const segments = {
+      hero: [0.00, 0.14],
+      split: [0.14, 0.28],
+      set1: [0.28, 0.35],
+      set2: [0.35, 0.42],
+      set3: [0.42, 0.49],
+      info: [0.49, 0.52],
+      infoOut: [0.52, 0.59], // new fade-out window
+      gallery: [0.59, 1.00]
+    };
+
+    // Adjust scroll height to match segments
+    const TOTAL_MULT = 15; // gives enough breathing room for smoothness
+    const spacer = document.getElementById('scrollSpacer');
+    function setScrollHeight() { spacer.style.height = `${(TOTAL_MULT - 1) * window.innerHeight}px`; }
+    setScrollHeight(); window.addEventListener('resize', setScrollHeight);
+
+    // ---------- Refs ----------
+    const heroTitle = document.getElementById('heroTitle');
+    const heroImg = document.getElementById('heroImg');
+    const float1 = document.getElementById('float1');
+    const float2 = document.getElementById('float2');
+    const float3 = document.getElementById('float3');
+
+    const splitContainer = document.getElementById('splitContainer');
+    const splitLeft = document.getElementById('splitLeft');
+    const splitRight = document.getElementById('splitRight');
+
+    const infoImgEl = document.getElementById('infoImg');
+
+    // Persistent photos
+    const photos = [
+      { el: document.getElementById('photoA'), base: { x: -18, y: 5, s: 0.95 } },
+      { el: document.getElementById('photoB'), base: { x: 0, y: -6, s: 1.00 } },
+      //{ el: document.getElementById('photoC'), base: { x: 18, y: 8, s: 0.95 } }
+    ];
+
+    // Paragraph copies
+    const copies = [
+      document.getElementById('copy1'),
+      document.getElementById('copy2'),
+      document.getElementById('copy3')
+    ];
+
+    // Info
+    const infoInner = document.getElementById('infoInner');
+
+    // ---------- Animation driver ----------
+    function updateAnimations() {
+      const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+      const windowHeight = window.innerHeight;
+      const maxScroll = windowHeight * (TOTAL_MULT - 1);
+      const p = clamp01(scrollY / maxScroll);
+
+      // HUD
+      // document.getElementById('debug').textContent = `Scroll: ${Math.round(scrollY)} | Max: ${Math.round(maxScroll)} | Progress: ${Math.round(p * 100)}%`;
+
+      // HERO (0 - .14)
+      const pHero = clamp01((p - segments.hero[0]) / (segments.hero[1] - segments.hero[0]));
+      if (p <= segments.hero[1]) {
+        const h = pHero; // 0..1
+        const titleY = 50 - (h * 80);
+        heroTitle.style.transform = `translateY(${titleY}vh)`;
+        heroImg.style.transform = `scale(${1 + h * 0.12})`;
+
+        const floatOpacity = Math.max(0, (h - 0.1) * 2);
+        const floatBlur = Math.max(0, 10 - (h * 15));
+        float1.style.opacity = floatOpacity; float1.style.filter = `blur(${floatBlur}px)`; float1.style.transform = `translateY(${-h * 7}vh) scale(${0.9 + h * 0.2})`;
+        float2.style.opacity = floatOpacity; float2.style.filter = `blur(${floatBlur}px)`; float2.style.transform = `translateY(${-h * 2}vh) scale(${0.9 + h * 0.5})`;
+        float3.style.opacity = floatOpacity; float3.style.filter = `blur(${floatBlur}px)`; float3.style.transform = `translateX(-70%) translateY(${-h * 0.5}vh) scale(${0.9 + h * 0.8})`;
+      }
+
+      // SPLIT (.14 - .28) + fade out hero title along with it
+      if (p > segments.split[0] && p <= segments.split[1]) {
+        const t = (p - segments.split[0]) / (segments.split[1] - segments.split[0]);
+        const slide = Math.min(1, t * 2);
+        splitLeft.style.transform = `translateX(${-250 + slide * 250}%)`;
+        splitRight.style.transform = `translateX(${350 - slide * 350}%)`;
+
+        // heroTitle opacity fades to 0 by end of split
+        const titleFade = 1 - t; // 1 -> 0
+        heroTitle.style.opacity = String(titleFade);
+        heroImg.style.opacity = String(0.7 * titleFade + 0.3); // keep some img presence
+
+        if (t > 0.6) {
+          const grow = (t - 0.6) / 0.4;
+          splitContainer.style.transform = `scale(${1 + grow * 1.5})`;
+          splitContainer.style.opacity = `${1 - grow}`;
+        } else {
+          splitContainer.style.transform = 'scale(1)';
+          splitContainer.style.opacity = '1';
+        }
+      }
+      if (p > segments.split[1]) { heroTitle.style.opacity = '0'; splitLeft.style.opacity = '0'; splitRight.style.opacity = '0';   }
+      
+      if (p > segments.info[1]) {
+        heroImg.style.opacity = '0';
+      }
+
+      // SECTION PHOTOS & PARAGRAPHS: sets 1..3
+      const setDefs = [segments.set1, segments.set2, segments.set3];
+      setDefs.forEach((range, idx) => {
+        const [s, e] = range; const t = clamp01((p - s) / (e - s));
+        const appear = easeOutCubic(Math.min(1, t / 0.4));
+        const fade = t > 0.85 ? (1 - easeInCubic((t - 0.9) / 0.1)) : 1;
+        const o = Math.max(0, Math.min(1, appear * fade));
+
+        // Paragraph copy falling in
+        const copy = copies[idx];
+        copy.style.opacity = o;
+        copy.style.transform = `translateY(${lerp(-24, 0, appear)}vh)`;
+      });
+
+      // Photos emphasize per active set
+      let active = 0;
+      if (p > segments.set2[0] && p <= segments.set2[1]) active = 1;
+      else if (p > segments.set3[0]) active = 2;
+
+      // Clamp to available photos (handles when photoC is commented out)
+      const activeIndex = Math.min(active, photos.length - 1);
+
+      // Each photo gets its own time window (when it "peaks")
+      // Map photo 0 → set1, photo 1 → set2, photo 2 → set3 (if present)
+      const photoWindows = [segments.set1, segments.set2, segments.set3];
+
+      photos.forEach((ph, i) => {
+        const win = photoWindows[i] || [segments.set1[0], segments.set3[1]];
+        const [ws, we] = win;
+
+        // Progress inside this photo's own window
+        const inWinT = clamp01((p - ws) / (we - ws));
+
+        // Appear only when it's close to show time → stays at 0 until near its window
+        const appear = easeOutCubic(clamp01((inWinT - 0.08) / 0.25)); // delay entry a bit
+
+        // How far past its window we are (used to blur+darken when it's "done active")
+        const post = clamp01((p - we) / 0.12);
+
+        // Is this photo the current active one *and* within its window?
+        const isActive = (i === activeIndex) && p >= ws && p <= we;
+
+        // Emphasis weight: active photo gets full weight; non-active reduced; further reduced after it's done
+        const w = isActive ? 1 : 0.25 * (1 - post);
+
+        // Scale and slight y drift (same behavior as before, but keyed to in-window progress)
+        const scale = ph.base.s * (1 + 0.12 * w);
+        const yDrift = (isActive ? -6 : -2) * inWinT; // slight lift while appearing/active
+
+        // Blur behavior:
+        //  - While appearing as active: low blur → sharp
+        //  - When non-active: medium blur
+        //  - After it's done active (post > 0): add extra blur
+        const blur = Math.max(0, isActive ? 4 * (1 - appear) : 6 + 10 * post);
+
+        // Darken behavior via CSS brightness():
+        //  - Active: full brightness (1)
+        //  - Non-active: darker (≈0.7)
+        //  - After done: even darker, but never below 0.35
+        const brightness = isActive ? 1 : Math.max(0.35, 0.75 - 0.4 * (appear + post));
+
+        // Opacity behavior:
+        //  - Starts at 0 until near its time (appear≈0)
+        //  - Active gets higher ceiling; after it's done, fade some more
+        const opBase = isActive ? (0.15 + 0.85 * appear) : (0.10 + 0.70 * appear);
+        const op = Math.max(0, Math.min(1, opBase * (1 - 0.7 * post)));
+
+        const x = ph.base.x;
+        ph.el.style.opacity = String(op);
+        ph.el.style.filter = `blur(${blur}px) brightness(${brightness})`;
+        ph.el.style.transform = `translate(${x}vw, ${ph.base.y + yDrift}vh) scale(${scale})`;
+      });
+
+      // --- INFO (0.78 - 0.90) — move up & appear ---
+      if (p > segments.info[0] && p <= segments.info[1]) {
+        const t = clamp01((p - segments.info[0]) / (segments.info[1] - segments.info[0]));
+        const a = easeOutCubic(Math.min(1, t / 0.5));
+        const y = lerp(14, -10, a); // from lower to above center (towards top)
+        infoInner.style.opacity = a;
+        infoInner.style.transform = `translateY(${y}vh)`;
+        infoInner.style.pointerEvents = 'auto';
+        if (infoImgEl) infoImgEl.style.filter = 'brightness(1) blur(0px)';
+      } else if (p <= segments.info[0]) {
+        infoInner.style.opacity = 0;
+        infoInner.style.transform = 'translateY(14vh)';
+        infoInner.style.pointerEvents = 'auto';
+        if (infoImgEl) infoImgEl.style.filter = 'brightness(1) blur(12px)';
+      }
+
+      // --- INFO OUT (0.90 - 0.94) — fade + darken + blur out ---
+      if (p > segments.infoOut[0] && p <= segments.infoOut[1]) {
+        const t = clamp01((p - segments.infoOut[0]) / (segments.infoOut[1] - segments.infoOut[0]));
+        const fade = 1 - easeInCubic(t);
+        infoInner.style.opacity = fade;
+        infoInner.style.transform = `translateY(${lerp(-10, -25, t)}vh)`;
+        infoInner.style.pointerEvents = 'none';
+        if (infoImgEl) infoImgEl.style.filter = `brightness(${Math.max(0, 1 - 0.8 * t)}) blur(${12 * t}px)`;
+      }
+
+      // Ensure fully hidden after fade window
+      if (p > segments.infoOut[1]) {
+        infoInner.style.opacity = 0;
+        infoInner.style.transform = 'translateY(-25vh)';
+        infoInner.style.pointerEvents = 'none';
+        if (infoImgEl) infoImgEl.style.filter = 'brightness(0) blur(12px)';
+      }
+
+      // --- GALLERY (starts only after info has fully faded) ---
+      if (p > segments.gallery[0]) {
+        const g = clamp01((p - segments.gallery[0]) / (segments.gallery[1] - segments.gallery[0]));
+        galleryElements.forEach((img, i) => {
+          const depth = parseFloat(img.dataset.depth);
+          const stagger = i * 0.1;
+          const prog = clamp01((g - stagger) / 0.5);
+          const focus = prog < 0.5 ? (prog / 0.5) : 1;
+          const opacity = focus;
+          const blur = 20 - (focus * 20);
+          const scale = 0.7 + (focus * 0.3);
+          const translateY = -depth * 20 * focus;
+          img.style.opacity = opacity;
+          img.style.filter = `blur(${blur}px)`;
+          img.style.transform = `translateY(${translateY}vh) scale(${focus > 0.8 && i === 4 ? 1.7 :scale})`;
+        });
+      }
+
+      // Scroll hint
+      const scrollHint = document.getElementById('scrollHint');
+      scrollHint.style.opacity = p > 0.05 ? '0' : '1';
+    }
+
+    // RAF driver with proper ticking reset
+    let ticking = false;
+    function onScroll() {
+      if (!ticking) {
+        requestAnimationFrame(() => { updateAnimations(); ticking = false; });
+        ticking = true;
+      }
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll, { passive: true });
+
+    // First paint
+    updateAnimations();
+    // ---------- Floating QR Modal ----------
+    const qrFab = document.getElementById('qrFab');
+    const qrModal = document.getElementById('qrModal');
+    const qrClose = document.getElementById('qrClose');
+    const qrImg = document.getElementById('qrImg');
+
+    // Change this if you want a custom QR content
+    const QR_DATA = location.href; // e.g., set to your RSVP link
+
+    function openQR() {
+      // Use a lightweight external QR image service
+      const url = 'https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=' + encodeURIComponent(QR_DATA);
+      if (qrImg.src !== url) qrImg.src = url;
+      qrModal.classList.add('open');
+      qrModal.setAttribute('aria-hidden', 'false');
+    }
+    function closeQR() {
+      qrModal.classList.remove('open');
+      qrModal.setAttribute('aria-hidden', 'true');
+    }
+
+    qrFab.addEventListener('click', openQR);
+    qrClose.addEventListener('click', closeQR);
+    qrModal.addEventListener('click', (e) => { if (e.target === qrModal) closeQR(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeQR(); });
+  </script>
+</body>
+
+</html>

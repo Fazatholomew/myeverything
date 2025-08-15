@@ -88,7 +88,7 @@
 
     .start-btn {
       margin-top: 16px;
-      padding: 12px 22px;
+      padding: 1rem 2rem;
       border: 0;
       border-radius: 999px;
       font-weight: 900;
@@ -97,6 +97,7 @@
       color: #0a0a0a;
       cursor: pointer;
       box-shadow: 0 10px 30px rgba(255, 255, 255, 0.08);
+      font-size: x-large;
     }
 
     .start-btn:active {
@@ -595,7 +596,8 @@
           "Love is the astrolabe of God’s mysteries."
           - Rumi
         </blockquote>
-        <p style="text-align: left; font-size: 1.0em; line-height: 1.2; margin-bottom: 1rem;">Dear My Love,
+        <p style="text-align: left; font-size: 1.0em; line-height: 1.2; margin-bottom: 1rem;">Dear <span
+            id="dear-nama">My Love</span>,
         </p>
         <p style="text-align: left; font-size: 1.0em; line-height: 1.2; margin-bottom: 1rem;">We started from “What
           are the odds?” and became “This is it. Us.” Please join us—your presence is our Alhamdulillah, your prayer is
@@ -658,7 +660,7 @@
         <button class="qr-close" id="qrClose" aria-label="Close">×</button>
         <h3 id="qrTitle">Scan to open</h3>
         <img id="qrImg" alt="QR code" src="" />
-        <p class="qr-caption">Point your camera to open the link.</p>
+        <p id='qr-caption' class="qr-caption">Point your camera to open the link.</p>
       </div>
     </div>
 
@@ -707,24 +709,48 @@
       gallery.appendChild(img); galleryElements.push(img);
     });
 
-    (function patchStartForWarmup() {
+    (function patchStartUnified() {
       if (typeof startExperience !== 'function') return;
       const _orig = startExperience;
-      window.startExperience = function () {
-        _orig();
-        const warm = () => {
-          if (!Array.isArray(galleryImages)) return;
-          galleryImages.forEach(src => {
-            const im = new Image();
-            try { im.fetchPriority = 'low'; } catch (_) { }
-            im.decoding = 'async';
-            im.loading = 'eager';
-            im.src = src;
-          });
+
+      window.startExperience = function (...args) {
+        const run = async () => {
+          // 1) Precompute LUT (shows PREPARING % via buildMotionLUTWithBudget)
+          try {
+            if (typeof buildMotionLUTWithBudget === 'function') {
+              if (typeof loaderText !== 'undefined' && loaderText) loaderText.textContent = 'PREPARING 0%';
+              await buildMotionLUTWithBudget(); // internally capped at ~10s if you used the earlier patch
+              if (typeof window !== 'undefined') window.LUT_READY = true;
+            }
+          } catch (_) { /* noop */ }
+
+          // 2) Proceed with the original flow (hides preloader, starts audio, etc.)
+          const ret = _orig.apply(this, args);
+
+          // 3) Warm gallery images (your existing warmup logic)
+          const warm = () => {
+            if (!Array.isArray(galleryImages)) return;
+            galleryImages.forEach(src => {
+              const im = new Image();
+              try { im.fetchPriority = 'low'; } catch (_) { }
+              im.decoding = 'async';
+              im.loading = 'eager';
+              im.src = src;
+            });
+          };
+          if ('requestIdleCallback' in window) requestIdleCallback(warm, { timeout: 1500 });
+          else setTimeout(warm, 300);
+
+          // 4) Prewarm QR image (if helper exists)
+          try { if (typeof openQR !== 'undefined' && typeof openQR.prewarm === 'function') openQR.prewarm(); } catch (_) { }
+
+          return ret;
         };
-        if ('requestIdleCallback' in window) requestIdleCallback(warm, { timeout: 1500 }); else setTimeout(warm, 300);
+
+        return run();
       };
     })();
+
 
 
     // ---------- Images for preloader count ----------
@@ -795,6 +821,234 @@
         bgmEl.removeEventListener('timeupdate', bgmEl._segmentLoopBound);
         bgmEl.addEventListener('timeupdate', bgmEl._segmentLoopBound);
       }
+    }
+
+    // ---- CONFIG ----
+    const USE_LUT = true;
+    const LUT_STEPS = 900;          // raise for smoother; lowers CPU when using LUT
+    const LUT_MAX_MS = 10000;       // hard cap ~10s for precomputation
+    let LUT_READY = false;
+    let LUT = null;                 // holds precomputed style strings
+
+    // ---- BUILD LUT WITH TIME BUDGET ----
+    async function buildMotionLUTWithBudget() {
+      if (!USE_LUT || LUT_READY) return;
+      const steps = LUT_STEPS;
+      const Gn = galleryElements.length;
+      const Pn = photos.length;
+
+      // Allocate containers
+      LUT = {
+        heroTitle: { t: new Array(steps), o: new Array(steps) },
+        heroImg: { t: new Array(steps), o: new Array(steps) },
+        float: [
+          { t: new Array(steps), o: new Array(steps), f: new Array(steps) },
+          { t: new Array(steps), o: new Array(steps), f: new Array(steps) },
+          { t: new Array(steps), o: new Array(steps), f: new Array(steps) },
+        ],
+        splitLeft: { t: new Array(steps) },
+        splitRight: { t: new Array(steps) },
+        splitWrap: { t: new Array(steps), o: new Array(steps) },
+        copies: Array.from({ length: 3 }, () => ({ t: new Array(steps), o: new Array(steps) })),
+        photos: Array.from({ length: Pn }, () => ({ t: new Array(steps), o: new Array(steps), f: new Array(steps) })),
+        infoInner: { t: new Array(steps), o: new Array(steps) },
+        gallery: Array.from({ length: Gn }, () => ({ t: new Array(steps), o: new Array(steps), f: new Array(steps) })),
+      };
+
+      const t0 = performance.now();
+      const photoWindows = [segments.set1, segments.set2, segments.set3];
+
+      for (let i = 0; i < steps; i++) {
+        const p = i / (steps - 1);
+
+        // --- HERO ---
+        const pHero = clamp01((p - segments.hero[0]) / (segments.hero[1] - segments.hero[0]));
+        const h = pHero; // 0..1
+        const titleY = 50 - (h * 80);
+        LUT.heroTitle.t[i] = `translateY(${titleY}vh)`;
+        LUT.heroImg.t[i] = `scale(${1 + h * 0.12})`;
+
+        // Floats (lock final state after hero window)
+        const finiteH = p <= segments.hero[1] ? h : 1;
+        const fOp = Math.max(0, (finiteH - 0.1) * 2);
+        const fBlur = Math.max(0, 10 - (finiteH * 15));
+        LUT.float[0].o[i] = fOp; LUT.float[0].f[i] = `blur(${fBlur}px)`; LUT.float[0].t[i] = `translateY(${-finiteH * 7}vh) scale(${0.9 + finiteH * 0.2})`;
+        LUT.float[1].o[i] = fOp; LUT.float[1].f[i] = `blur(${fBlur}px)`; LUT.float[1].t[i] = `translateY(${-finiteH * 2}vh) scale(${0.9 + finiteH * 0.5})`;
+        LUT.float[2].o[i] = fOp; LUT.float[2].f[i] = `blur(${fBlur}px)`; LUT.float[2].t[i] = `translateX(-70%) translateY(${-finiteH * 0.5}vh) scale(${0.9 + finiteH * 0.8})`;
+
+        // --- SPLIT ---
+        let heroTitleOpacity = 1;
+        let heroImgOpacity = 1;
+        if (p > segments.split[0] && p <= segments.split[1]) {
+          const t = (p - segments.split[0]) / (segments.split[1] - segments.split[0]);
+          const slide = Math.min(1, t * 2);
+          LUT.splitLeft.t[i] = `translateX(${-250 + slide * 250}%)`;
+          LUT.splitRight.t[i] = `translateX(${350 - slide * 350}%)`;
+          const titleFade = 1 - t; // 1 -> 0
+          heroTitleOpacity = titleFade;
+          heroImgOpacity = (0.7 * titleFade + 0.3);
+          if (t > 0.6) {
+            const grow = (t - 0.6) / 0.4;
+            LUT.splitWrap.t[i] = `scale(${1 + grow * 1.5})`;
+            LUT.splitWrap.o[i] = (1 - grow);
+          } else {
+            LUT.splitWrap.t[i] = `scale(1)`;
+            LUT.splitWrap.o[i] = 1;
+          }
+        } else if (p > segments.split[1]) {
+          LUT.splitLeft.t[i] = `translateX(0%)`;
+          LUT.splitRight.t[i] = `translateX(0%)`;
+          LUT.splitWrap.t[i] = `scale(2.5)`; // final stretched
+          LUT.splitWrap.o[i] = 0;            // faded out
+          heroTitleOpacity = 0;
+          heroImgOpacity = 0.3;            // as per original split fade calc
+        } else {
+          LUT.splitLeft.t[i] = `translateX(-250%)`;
+          LUT.splitRight.t[i] = `translateX(350%)`;
+          LUT.splitWrap.t[i] = `scale(1)`;
+          LUT.splitWrap.o[i] = 1;
+          heroTitleOpacity = 1;
+          heroImgOpacity = 1;
+        }
+        LUT.heroTitle.o[i] = heroTitleOpacity;
+        LUT.heroImg.o[i] = heroImgOpacity;
+
+        // --- COPIES (set1..set3) ---
+        [segments.set1, segments.set2, segments.set3].forEach((range, idx) => {
+          const [s, e] = range; const t = clamp01((p - s) / (e - s));
+          const appear = easeOutCubic(Math.min(1, t / 0.4));
+          const fade = t > 0.85 ? (1 - easeInCubic((t - 0.9) / 0.1)) : 1;
+          const o = Math.max(0, Math.min(1, appear * fade));
+          LUT.copies[idx].o[i] = o;
+          LUT.copies[idx].t[i] = `translateY(${lerp(-24, 0, appear)}vh)`;
+        });
+
+        // --- PHOTOS emphasize per active set ---
+        let active = 0;
+        if (p > segments.set2[0] && p <= segments.set2[1]) active = 1; else if (p > segments.set3[0]) active = 2;
+        const globalStart = segments.set1[0];
+        const globalEnd = segments.set3[1];
+        const gp = clamp01((p - globalStart) / (globalEnd - globalStart));
+        const gAppear = easeOutCubic(Math.min(1, gp / 0.15));
+
+        photos.forEach((ph, pi) => {
+          const w = pi === active ? 1 : 0.1;
+          const scale = ph.base.s * (1 + 0.12 * w * gAppear);
+          const blur = Math.max(0, 12 - 12 * gAppear * w);
+          const op = 0.15 + 0.85 * gAppear * (pi === active ? 1 : 0.8);
+          const yDrift = (pi === active ? -6 : -2) * gp;
+          const x = ph.base.x;
+          LUT.photos[pi].o[i] = String(op);
+          LUT.photos[pi].f[i] = `blur(${blur}px)`;
+          LUT.photos[pi].t[i] = `translate(${x}vw, ${ph.base.y + yDrift}vh) scale(${scale})`;
+        });
+
+        // --- INFO (0.78 - 0.90) ---
+        if (p > segments.info[0] && p <= segments.info[1]) {
+          const t = clamp01((p - segments.info[0]) / (segments.info[1] - segments.info[0]));
+          const a = easeOutCubic(Math.min(1, t / 0.5));
+          const y = lerp(14, -10, a);
+          LUT.infoInner.o[i] = a;
+          LUT.infoInner.t[i] = `translateY(${y}vh)`;
+        } else if (p <= segments.info[0]) {
+          LUT.infoInner.o[i] = 0; LUT.infoInner.t[i] = 'translateY(14vh)';
+        } else {
+          // after info window keep last pose
+          LUT.infoInner.o[i] = 1; LUT.infoInner.t[i] = 'translateY(-10vh)';
+        }
+
+        // --- GALLERY ---
+        if (p > segments.gallery[0]) {
+          const g = clamp01((p - segments.gallery[0]) / (segments.gallery[1] - segments.gallery[0]));
+          galleryElements.forEach((img, gi) => {
+            const depth = parseFloat(img.dataset.depth);
+            const stagger = gi * 0.1;
+            const prog = clamp01((g - stagger) / 0.5);
+            const focus = prog < 0.7 ? (prog / 0.7) : 1;
+            const opacity = focus;
+            const blur = Math.max(0.5, 20 - (focus * 19.5));
+            const scale = 0.7 + (focus * 0.3);
+            const translateY = -depth * 20 * focus;
+            LUT.gallery[gi].o[i] = opacity;
+            LUT.gallery[gi].f[i] = `blur(${blur}px)`;
+            LUT.gallery[gi].t[i] = `translateY(${translateY}vh) scale(${scale})`;
+          });
+        } else {
+          for (let gi = 0; gi < Gn; gi++) {
+            LUT.gallery[gi].o[i] = 0;
+            LUT.gallery[gi].f[i] = `blur(20px)`;
+            LUT.gallery[gi].t[i] = `translateY(0vh) scale(0.7)`;
+          }
+        }
+
+        // Progress + time budget
+        if (i % 60 === 0) {
+          const elapsed = performance.now() - t0;
+          const pct = Math.round((i / (steps - 1)) * 100);
+          if (loaderText) loaderText.textContent = `PREPARING ${pct}%`;
+          if (elapsed > LUT_MAX_MS) break; // hard cap
+          // Yield a frame to keep UI responsive
+          await new Promise(r => requestAnimationFrame(r));
+        }
+      }
+    }
+
+    // ---- APPLY LUT (fast path) ----
+    function applyLUT(p) {
+      if (!LUT || !USE_LUT) return false;
+      const i = Math.max(0, Math.min(LUT_STEPS - 1, Math.round(p * (LUT_STEPS - 1))));
+
+      // Hero
+      heroTitle.style.transform = LUT.heroTitle.t[i];
+      heroTitle.style.opacity = String(LUT.heroTitle.o[i]);
+      heroImg.style.transform = LUT.heroImg.t[i];
+      heroImg.style.opacity = String(LUT.heroImg.o[i]);
+
+      // Floats
+      [float1, float2, float3].forEach((el, idx) => {
+        if (!el) return;
+        el.style.opacity = String(LUT.float[idx].o[i]);
+        el.style.filter = LUT.float[idx].f[i];
+        el.style.transform = LUT.float[idx].t[i];
+      });
+
+      // Split text
+      splitLeft.style.transform = LUT.splitLeft.t[i];
+      splitRight.style.transform = LUT.splitRight.t[i];
+      splitContainer.style.transform = LUT.splitWrap.t[i];
+      splitContainer.style.opacity = String(LUT.splitWrap.o[i]);
+
+      // Copies
+      copies.forEach((cp, ci) => {
+        cp.style.opacity = String(LUT.copies[ci].o[i]);
+        cp.style.transform = LUT.copies[ci].t[i];
+      });
+
+      // Photos
+      photos.forEach((ph, pi) => {
+        const L = LUT.photos[pi];
+        ph.el.style.opacity = String(L.o[i]);
+        ph.el.style.filter = L.f[i];
+        ph.el.style.transform = L.t[i];
+      });
+
+      // Info
+      infoInner.style.opacity = String(LUT.infoInner.o[i]);
+      infoInner.style.transform = LUT.infoInner.t[i];
+
+      // Gallery
+      galleryElements.forEach((img, gi) => {
+        const Lg = LUT.gallery[gi];
+        img.style.opacity = String(Lg.o[i]);
+        img.style.filter = Lg.f[i];
+        img.style.transform = Lg.t[i];
+      });
+
+      // Scroll hint
+      const scrollHint = document.getElementById('scrollHint');
+      if (scrollHint) scrollHint.style.opacity = p > 0.05 ? '0' : '1';
+
+      return true;
     }
 
     function startExperience() {
@@ -1019,7 +1273,7 @@
         //  - Starts at 0 until near its time (appear≈0)
         //  - Active gets higher ceiling; after it's done, fade some more
         const opBase = isActive ? (0.15 + 0.85 * appear) : (0.10 + 0.70 * appear);
-        const op = Math.max(0, Math.min(1, opBase * (1 - 0.7 * post)));
+        const op = post > 0.9 ? 0 : Math.max(0, Math.min(1, opBase * (1 - 1 * post)));
 
         const x = ph.base.x;
         ph.el.style.opacity = String(op);
@@ -1095,6 +1349,22 @@
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', onScroll, { passive: true });
 
+    // ---- PATCH updateAnimations(): skip heavy math when LUT is ready ----
+    (function patchUpdateForLUT() {
+      const _orig = updateAnimations;
+      window.updateAnimations = function () {
+        const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+        const windowHeight = window.innerHeight;
+        const maxScroll = windowHeight * (TOTAL_MULT - 1);
+        const p = clamp01(scrollY / maxScroll);
+        // HUD
+        // document.getElementById('debug').textContent = `Scroll: ${Math.round(scrollY)} | Max: ${Math.round(maxScroll)} | Progress: ${Math.round(p * 100)}%`; -->
+        if (USE_LUT && LUT_READY && applyLUT(p)) return; // fast path
+        // else fallback to original heavy math
+        return _orig();
+      };
+    })();
+
     // First paint
     updateAnimations();
     // ---------- Floating QR Modal ----------
@@ -1103,20 +1373,128 @@
     const qrClose = document.getElementById('qrClose');
     const qrImg = document.getElementById('qrImg');
 
+    // === QR: take RSVP code from ?q and cache image ===
+    // + Persist QR image in localStorage keyed by the RSVP data so it works offline after first load
+    // Helpers for localStorage-based QR cache
+    const QR_CACHE_NS = 'qr-cache:v1:';
+    function qrCacheKey(data) { return QR_CACHE_NS + encodeURIComponent(data); }
+    function qrLoadFromCache(data) { try { return localStorage.getItem(qrCacheKey(data)); } catch (_) { return null; } }
+    function qrSaveToCache(data, dataUrl) { try { localStorage.setItem(qrCacheKey(data), dataUrl); } catch (_) { /* quota or disabled */ } }
+    async function fetchQrDataURL(url) {
+      const res = await fetch(url, { mode: 'cors', cache: 'force-cache' });
+      if (!res.ok) throw new Error('QR fetch failed');
+      const blob = await res.blob();
+      return await new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(fr.result);
+        fr.onerror = reject;
+        fr.readAsDataURL(blob);
+      });
+    }
+
     // Change this if you want a custom QR content
     const QR_DATA = location.href; // e.g., set to your RSVP link
 
     function openQR() {
-      // Use a lightweight external QR image service
-      const url = 'https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=' + encodeURIComponent(QR_DATA);
-      if (qrImg.src !== url) qrImg.src = url;
+      const params = new URLSearchParams(location.search);
+      let nama = localStorage.getItem('nama') || '';
+      let jatah = localStorage.getItem('jatah') || 0;
+      const RSVP_CODE = params.get('q');
+      const data = RSVP_CODE ? RSVP_CODE : (typeof QR_DATA !== 'undefined' ? QR_DATA : location.href);
+      const serviceURL = 'https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=' + encodeURIComponent(data);
+
+      // 1) Try persistent cache first
+      const cachedDataURL = qrLoadFromCache(data);
+      if (cachedDataURL) {
+        qrImg.src = cachedDataURL;
+      } else {
+        // 2) Fallback to in-session object URL if present
+        if (window._qrObjectUrl && window._qrObjectFor === serviceURL) {
+          qrImg.src = window._qrObjectUrl;
+        } else {
+          // 3) Show network image immediately (may fail offline on first-ever open)
+          qrImg.src = serviceURL;
+        }
+        // 4) In background, fetch → dataURL → persist to localStorage
+        fetchQrDataURL(serviceURL)
+          .then((dataUrl) => {
+            qrSaveToCache(data, dataUrl);
+            // swap to cached dataURL if we're still showing the network/object URL
+            if (qrImg.src === serviceURL || qrImg.src === (window._qrObjectUrl || '')) {
+              qrImg.src = dataUrl;
+            }
+            // keep an in-session object URL if you still want it
+            try {
+              const blob = dataURLToBlob(dataUrl);
+              if (window._qrObjectUrl) URL.revokeObjectURL(window._qrObjectUrl);
+              window._qrObjectUrl = URL.createObjectURL(blob);
+              window._qrObjectFor = serviceURL;
+            } catch (_) { }
+          })
+          .catch(() => { /* offline or CORS → ignore; network URL may be cached by the browser */ });
+
+      }
       qrModal.classList.add('open');
       qrModal.setAttribute('aria-hidden', 'false');
     }
+
+    // helper to convert dataURL back to Blob (optional, for in-session objectURL)
+    function dataURLToBlob(dataUrl) {
+      const [hdr, b64] = dataUrl.split(',');
+      const mime = (hdr.match(/data:(.*?);base64/) || [])[1] || 'image/png';
+      const bin = atob(b64);
+      const len = bin.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+      return new Blob([bytes], { type: mime });
+    }
+
     function closeQR() {
       qrModal.classList.remove('open');
       qrModal.setAttribute('aria-hidden', 'true');
     }
+
+    // Optional: prewarm QR right after START (so first open is instant)
+    (function warmQROnStart() {
+      if (typeof startExperience !== 'function') return;
+      const _orig = startExperience;
+      window.startExperience = (async function () {
+        await _orig.apply(this, arguments);
+        try { openQR.prewarm?.(); } catch (_) { }
+      });
+    })();
+
+    // Provide a prewarm helper (does not open the modal)
+    openQR.prewarm = function () {
+      const params = new URLSearchParams(location.search);
+      const RSVP_CODE = params.get('q');
+      const data = RSVP_CODE ? RSVP_CODE : (typeof QR_DATA !== 'undefined' ? QR_DATA : location.href);
+      const serviceURL = 'https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=' + encodeURIComponent(data);
+
+      if (RSVP_CODE) {
+        fetch(`https://undang.vip/api/virnafaza/${RSVP_CODE}`).then(response => {
+          if (response.ok) return response.json();
+        }).then(data => {
+          nama = data.nama || '';
+          jatah = data.jatah || 0;
+          localStorage.setItem('nama', nama);
+          localStorage.setItem('jatah', jatah);
+        }).catch(() => {
+        });
+      }
+      document.getElementById('qrTitle').textContent = nama;
+      document.getElementById('qr-caption').textContent = `Valid for ${jatah} person${jatah > 1 ? 's' : ''}.`;
+      document.getElementById('dear-nama').textContent = nama || 'My Love';
+
+      // If already cached persistently, nothing to do
+      if (qrLoadFromCache(data)) return;
+
+      // Fetch and persist quietly
+      fetchQrDataURL(serviceURL)
+        .then((dataUrl) => qrSaveToCache(data, dataUrl))
+        .catch(() => { /* ignore */ });
+    };
+
 
     qrFab.addEventListener('click', openQR);
     qrClose.addEventListener('click', closeQR);

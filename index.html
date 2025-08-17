@@ -2,6 +2,11 @@
 <html lang="en">
 
 <head>
+  <!-- Favicon Links -->
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16x16.png">
+  <link rel="manifest" href="/assets/site.webmanifest">
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Wedding of Virna & Faza</title>
@@ -531,6 +536,34 @@
       font-weight: 700;
       font-style: normal;
     }
+
+    .orientation-warning {
+      position: fixed;
+      inset: 0;
+      background: #0a0a0a;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      text-align: center;
+      padding: 2rem;
+    }
+
+    .orientation-warning.show {
+      display: flex;
+    }
+
+    .orientation-warning h2 {
+      font-size: 2rem;
+      margin-bottom: 1rem;
+    }
+
+    .orientation-warning p {
+      font-size: 1.2rem;
+      color: #bbb;
+      line-height: 1.4;
+    }
   </style>
 </head>
 
@@ -539,6 +572,12 @@
     <div class="loader-ring" id="loaderRing"></div>
     <div class="loader-text" id="loadingText">LOADING</div>
     <button class="start-btn hidden" id="startBtn" aria-label="Start">START</button>
+  </div>
+
+  <div class="orientation-warning" id="orientationWarning">
+    <h2>Please rotate your device</h2>
+    <p>This experience is optimized for portrait orientation.<br>Please turn your device vertically.<br>Or use smaller
+      or mobile device only.</p>
   </div>
 
   <!-- <div class="debug" id="debug">Scroll: 0 | Progress: 0%</div> -->
@@ -1054,6 +1093,7 @@
     function startExperience() {
       // Hide preloader
       preloader.classList.add('hidden');
+      preloader.dataset.started = 'true';
       contentWrap.removeAttribute('aria-hidden');
       // Play music (unmute first for iOS Safari)
       try {
@@ -1283,17 +1323,16 @@
 
       // --- INFO (0.78 - 0.90) — move up & appear ---
       if (p > segments.info[0] && p <= segments.info[1]) {
-        const t = clamp01((p - segments.info[0]) / (segments.info[1] - segments.info[0]));
-        const a = easeOutCubic(Math.min(1, t / 0.5));
-        const y = lerp(14, -10, a); // from lower to above center (towards top)
-        infoInner.style.opacity = a;
-        infoInner.style.transform = `translateY(${y}vh)`;
+        // Snap to fully visible immediately when entering the range
+        infoInner.style.opacity = '1';
+        infoInner.style.transform = 'translateY(-10vh)';
         infoInner.style.pointerEvents = 'auto';
         if (infoImgEl) infoImgEl.style.filter = 'brightness(1) blur(0px)';
       } else if (p <= segments.info[0]) {
-        infoInner.style.opacity = 0;
+        // Before the section
+        infoInner.style.opacity = '0';
         infoInner.style.transform = 'translateY(14vh)';
-        infoInner.style.pointerEvents = 'auto';
+        infoInner.style.pointerEvents = 'none';
         if (infoImgEl) infoImgEl.style.filter = 'brightness(1) blur(12px)';
       }
 
@@ -1436,6 +1475,10 @@
       }
       qrModal.classList.add('open');
       qrModal.setAttribute('aria-hidden', 'false');
+
+      document.getElementById('qrTitle').textContent = nama;
+      document.getElementById('qr-caption').textContent = `Valid for ${jatah} person${jatah > 1 ? 's' : ''}.`;
+      document.getElementById('dear-nama').textContent = nama || 'My Love';
     }
 
     // helper to convert dataURL back to Blob (optional, for in-session objectURL)
@@ -1466,6 +1509,8 @@
 
     // Provide a prewarm helper (does not open the modal)
     openQR.prewarm = function () {
+      let nama = localStorage.getItem('nama') || '';
+      let jatah = localStorage.getItem('jatah') || 0;
       const params = new URLSearchParams(location.search);
       const RSVP_CODE = params.get('q');
       const data = RSVP_CODE ? RSVP_CODE : (typeof QR_DATA !== 'undefined' ? QR_DATA : location.href);
@@ -1500,6 +1545,30 @@
     qrClose.addEventListener('click', closeQR);
     qrModal.addEventListener('click', (e) => { if (e.target === qrModal) closeQR(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeQR(); });
+
+    function checkOrientation() {
+      const isPortrait = window.innerHeight > window.innerWidth;
+      const warning = document.getElementById('orientationWarning');
+      const preloader = document.getElementById('preloader');
+
+      if (!isPortrait) {
+        warning.classList.add('show');
+        preloader.classList.add('hidden');
+      } else {
+        warning.classList.remove('show');
+        // Don't show preloader again if START button was already clicked
+        if (loadedImages < totalImages && !preloader.dataset.started) {
+          preloader.classList.remove('hidden');
+        }
+      }
+    }
+
+    // Check on load and resize
+    checkOrientation();
+    window.addEventListener('resize', checkOrientation);
+    window.addEventListener('orientationchange', () => {
+      setTimeout(checkOrientation, 100); // small delay for orientation change
+    });
 
   </script>
 </body>

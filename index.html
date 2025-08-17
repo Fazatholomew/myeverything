@@ -1097,6 +1097,26 @@
       contentWrap.removeAttribute('aria-hidden');
       // Play music (unmute first for iOS Safari)
       try {
+        let nama = localStorage.getItem('nama') || '';
+        let jatah = localStorage.getItem('jatah') || 0;
+        const params = new URLSearchParams(location.search);
+        const RSVP_CODE = params.get('q');
+        const data = RSVP_CODE ? RSVP_CODE : (typeof QR_DATA !== 'undefined' ? QR_DATA : location.href);
+
+        if (RSVP_CODE.length === 32) {
+          fetch(`https://undang.vip/api/virnafaza/${RSVP_CODE}`).then(response => {
+            if (response.ok) return response.json();
+          }).then(data => {
+            nama = data.nama || '';
+            jatah = data.jatah || 0;
+            localStorage.setItem('nama', nama);
+            localStorage.setItem('jatah', jatah);
+          }).catch(() => {
+          });
+        }
+        document.getElementById('qrTitle').textContent = nama;
+        document.getElementById('qr-caption').textContent = `Valid for ${jatah} person${jatah > 1 ? 's' : ''}.`;
+        document.getElementById('dear-nama').textContent = nama || 'My Love';
         setBgmStartPosition(bgm);  // seek to the desired starting second
         enableSegmentLoop(bgm);    // optional: keep looping within the segment
         bgm.muted = false;
@@ -1516,7 +1536,7 @@
       const data = RSVP_CODE ? RSVP_CODE : (typeof QR_DATA !== 'undefined' ? QR_DATA : location.href);
       const serviceURL = 'https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=' + encodeURIComponent(data);
 
-      if (RSVP_CODE) {
+      if (RSVP_CODE.length === 32) {
         fetch(`https://undang.vip/api/virnafaza/${RSVP_CODE}`).then(response => {
           if (response.ok) return response.json();
         }).then(data => {

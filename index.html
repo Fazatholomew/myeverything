@@ -1536,7 +1536,7 @@
       const data = RSVP_CODE ? RSVP_CODE : (typeof QR_DATA !== 'undefined' ? QR_DATA : location.href);
       const serviceURL = 'https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=' + encodeURIComponent(data);
 
-      if (RSVP_CODE.length === 32) {
+      if (RSVP_CODE) {
         fetch(`https://undang.vip/api/virnafaza/${RSVP_CODE}`).then(response => {
           if (response.ok) return response.json();
         }).then(data => {
